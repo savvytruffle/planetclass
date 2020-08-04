@@ -1,4 +1,3 @@
-
 # coding: utf-8
 
 #import matplotlib
@@ -9,18 +8,17 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import itertools
 import numpy as np
-from astropy.io import fits
-from sklearn import datasets
-from sklearn.decomposition import FastICA, PCA
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, _cov
-from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
-
-from scipy import linalg
+#from astropy.io import fits
+#from sklearn import datasets
+#from sklearn.decomposition import FastICA, PCA
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+#from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
+#from scipy import linalg
 from sklearn.preprocessing import StandardScaler
 
 
 def user_rc(lw=1.5, fontsize=10, figsize=(8, 5)):
-    """Set plotting RC parameters"""
+    """Set plotting RC parameters to make plots more readable"""
     plt.rc('lines', linewidth=lw)
     plt.rc('axes', lw=1, labelsize=18, titlesize=22)
     plt.rc('font', size=14, weight='normal')
@@ -50,14 +48,12 @@ def get_central_bandpass(lam_i, lam_f, bp=0.1, cbp=0.1, Nbp=None, ret_all=False)
     print("Number of bandpasses = {}".format(Nbp))
     lam_central = np.clip(np.array([lam_i*(1.+cbp)**n * (2. + cbp) / 2. \
     						for n in range(Nbp)]), lam_i, lam_f)
-#    if central:
     if ret_all:
         return lam_central, lam_central*(1-bp/2.), lam_central*(1.+bp/2.)
     return lam_central
-#    return np.array([lam_i * (1+bp)**n for n in range(Nbp)])
 
 def get_avg_albedo(x, y, bin_left, bin_right):
-    """Computes the mean albedo given wavelength bins"""
+    """Computes the mean albedo (y val) given wavelength (x val) bins"""
     results = np.array([np.nanmean(y[(x>=bin_left[ii]) * (x<bin_right[ii])]) \
     						for ii in range(len(bin_left))])
     return results
@@ -80,8 +76,8 @@ def n_choose_2(n):
     return n*(n-1)/2.
 
 def make_spectrum_uniform(x, x0, y0):
-    """Transform albedo spectrum on the same wavelength grid, where x is new grid 
-    and x0, y0 is base values"""
+    """Transform albedo spectrum on the same wavelength grid, where x is new 
+    grid and x0, y0 is base values"""
     return np.interp(x, x0, y0)
 
 def get_radius(mass, logg):
@@ -104,13 +100,14 @@ def simulate_planets(loggs, mi=1.0, mf=10., Nm=10, logspace=True):
 def get_sub_neptune_radius(Mp, f_env=0.01, Fp=1.0, age=5.):
     """Approx M-R relation from Lopez & Fortney (2014)
     https://iopscience.iop.org/article/10.1088/0004-637X/792/1/1/"""
-    Renv = 2.06 * (Mp**-0.21) * ((f_env/5.)**0.59) * (Fp**0.044) * ((age/5.)**-0.18)
+    Renv = 2.06 * (Mp**-0.21) * ((f_env/5.)**0.59) * \
+            (Fp**0.044) * ((age/5.)**-0.18)
     Rcore = Mp**0.25
     return Renv + Rcore
 
-def load_mn_spectra(mrange, grange, Trange, fsedrange,
+def load_mn_spectra(mrange, grange, Trange, fsedrange, Nwavelength=2000,
                     prefix='data/Reflection_Spectra_Repository/'):
-    """Loads in mini neptune spectra from MacDonald+2018, 
+    """Loads in mini/sub-neptune spectra from MacDonald+2018, 
     with size = (mrange, grange, Trange, fsedrange, Nwavelength, 2)"""
 #    mrange = np.array([0, 0.5, 1.0, 1.5, 2.0])
 #    grange = np.arange(2.0, 3.7, 0.2)
@@ -118,13 +115,13 @@ def load_mn_spectra(mrange, grange, Trange, fsedrange,
 #    fsedrange = np.arange(10).astype(int)[::2]+1
 
     data = np.zeros((mrange.shape[0], grange.shape[0], 
-                     Trange.shape[0], fsedrange.shape[0], 2000, 2))
+                     Trange.shape[0], fsedrange.shape[0], Nwavelength, 2))
     for i,j,k,l in itertools.product(range(mrange.shape[0]), 
                                      range(grange.shape[0]),
                                      range(Trange.shape[0]),
                                      range(fsedrange.shape[0])):
-        bad=np.zeros(2000).astype(bool)
-        bad[572]=True#bad index
+        bad=np.zeros(Nwavelength).astype(bool)
+        bad[572]=True #known bad index from correspondence w/MacDonald+2018
         fname = prefix+'m{0}/g{1}/T{2}/Albedo_spectra_m{0}_g{1}_T{2}_f{3}.dat'.format(
                                 mrange[i], grange[j], Trange[k], fsedrange[l])
         data[i,j,k,l,:,:] = np.loadtxt(fname, skiprows=1, usecols=(0,1))
@@ -132,8 +129,29 @@ def load_mn_spectra(mrange, grange, Trange, fsedrange,
         data[i,j,k,l,bad,1] = np.interp(data[i,j,k,l,bad,0], data[i,j,k,l,:,0][~bad], 
                                         data[i,j,k,l,:,1][~bad])
     return data
-    
-    
+
+def load_ss_spectra(indir='data/ga_ss_spectra/'):
+    """Load in SS object spectra from VPL. Hard coded"""
+    modern_earth = np.loadtxt(indir+'Earth_geo_albedo.txt')
+    hazy_archean_earth = np.loadtxt(indir+'Hazy_ArcheanEarth_geo_albedo.txt')
+    jupiter = np.loadtxt(indir+'Jupiter_geo_albedo.txt')
+    neptune = np.loadtxt(indir+'Neptune_geo_albedo.txt')
+    proterozoic_hiO2 = np.loadtxt(indir+'proterozoic_hi_o2_geo_albedo.txt')
+    proterozoic_loO2 = np.loadtxt(indir+'proterozoic_low_o2_geo_albedo.txt')
+    uranus = np.loadtxt(indir+'Uranus_geo_albedo.txt')
+    saturn = np.loadtxt(indir+'Saturn_geo_albedo.txt')
+    return modern_earth, proterozoic_hiO2, proterozoic_loO2, hazy_archean_earth,\
+            jupiter, neptune, uranus, saturn
+#    ## warm nep. spectra from Kaltenegger (?) group, smilar to MacDonald+2018
+#    warm_nep1au_cloud = np.loadtxt(indir+'warm_neptune_1au_clouds.txt')
+#    warm_nep1au_nocloud = np.loadtxt(indir+'warm_neptune_1au_noclouds.txt')
+#    warm_nep2au = np.loadtxt(indir+'warm_neptune_2au.txt')
+#
+#    # the warm nep spectra have different units
+#    warm_nep1au_cloud[:,0]*=1e-3
+#    warm_nep1au_nocloud[:,0]*=1e-3
+#    warm_nep2au[:,0]*=1e-3
+        
 def get_noise(x, dx=0.11):
     """Simulate random white noise (Gaussian distribution with scale dx)"""
     return np.random.normal(0, scale=dx, size=x.shape)
@@ -141,7 +159,10 @@ def get_noise(x, dx=0.11):
     
 def map_obs_to_fiducial(obs_ind, obs_labels, header, mrange, grange, 
                         Trange, fsedrange):
-    """Map raveled index to original m,g,T,fsed grid"""
+    """Map raveled index ("fake observations") to original 
+    array[mrange,grange,Trange,fsedrange] simulation grid"""
+    
+    # compute g in fake observations using mass and radius
     g_ind = np.argmin(abs(np.log10(obs_labels[obs_ind,header['mass']] * \
                     1./obs_labels[obs_ind,header['radius']]**2 * 981)-grange))
     m_ind = np.argmin(abs(obs_labels[obs_ind,header['m']]-mrange))
@@ -174,13 +195,13 @@ def plot_filter_set(lam_i, lam_f, lam_c, filter_choice=None, ax=None, ylabel='')
         
     for cnter, lstuff in enumerate(zip(lam_c, lam_i, lam_f)):
         lc, li, lf = lstuff
-#         print(cnter, li, lf)
-#         ax.plot([li, lf], [-0.1+(cnter%1)*0.05]*2, lw=6, alpha=alphas[cnter], color='0.7')
         if cnter in filter_choice:
-            p = patches.Rectangle((li,0), lf-li, 10, linewidth=0, color='C{}'.format(cnter), alpha=0.8,
+            p = patches.Rectangle((li,0), lf-li, 10, linewidth=0, 
+                                  color='C{}'.format(cnter), alpha=0.8,
                              hatch='//', zorder=Nbp+1)
         else:
-            p = patches.Rectangle((li,0), lf-li, 10, linewidth=0, color='C{}'.format(cnter), 
+            p = patches.Rectangle((li,0), lf-li, 10, linewidth=0, 
+                                  color='C{}'.format(cnter), 
                                   linestyle='--', alpha=0.7)
         ax.add_patch(p)
     ax.set_xlim(lam_i[0], lam_f[-1])
@@ -196,6 +217,9 @@ def plot_filter_set(lam_i, lam_f, lam_c, filter_choice=None, ax=None, ylabel='')
 
 def apply_LDA(Nchoose, features, labels, train_set, test_set, test_subsets, Nbp, 
               acc_thresh=None, topX=5, plot=True):
+    """For each Nchoose bandpass/filter combinations, train LDA & then apply 
+    model to Nsubset test sets to compute best bp/filter combo indices, and 
+    the corresponding mean & std of accuracy."""
     Nsubsets = test_subsets.shape[-1]
     colour_inds = np.array(get_colour_inds(Nbp, Nchoose=Nchoose))
     accuracy = np.zeros((len(colour_inds), Nsubsets))
@@ -231,4 +255,25 @@ def apply_LDA(Nchoose, features, labels, train_set, test_set, test_subsets, Nbp,
         good = np.argsort(np.nanmean(accuracy, axis=1))[::-1][:topX]
 #     print("Best filters={}; Avg Accuracy={}; Std={}".format(colour_inds[good], np.nanmean(accuracy, axis=1)[good], 
 #                                    np.nanstd(accuracy, axis=1)[good]))
-    return colour_inds[good], np.nanmean(accuracy, axis=1)[good], np.nanstd(accuracy, axis=1)[good]
+    return colour_inds[good], np.nanmean(accuracy, axis=1)[good], \
+            np.nanstd(accuracy, axis=1)[good]
+            
+def apply_LDA_w_noise(features, labels, train_set, test_subsets, filters):
+    """Apply LDA to noisy data (features), given known labels and specified 
+    filters/bandpasses and training & test indices."""
+    Nsubsets = test_subsets.shape[-1]
+    accuracy_w_noise = np.zeros((len(filters), Nsubsets))
+    for jj in range(len(filters)):
+        X_train = features[train_set,:][:, filters[jj]]
+        Y_train = labels[train_set]
+        X_train = StandardScaler().fit_transform(X_train)
+        lda = LinearDiscriminantAnalysis(store_covariance=True)
+        lda.fit(X_train, Y_train).transform(X_train)
+        for kk in range(Nsubsets):
+            X_test = features[test_subsets[:,kk],:][:, filters[jj]]
+            X_test = StandardScaler().fit_transform(X_test)
+            Y_test = labels[test_subsets[:,kk]]
+            lda_pred = lda.predict(X_test)
+            lda_wrong = (abs(lda_pred-Y_test)>0)
+            accuracy_w_noise[jj, kk] = 1.-lda_wrong.sum()/float(X_test.shape[0])
+    return accuracy_w_noise
